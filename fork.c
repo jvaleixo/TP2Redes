@@ -1,5 +1,3 @@
-/* A simple server in the internet domain using TCP
-   The port number is passed as an argument */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +22,7 @@ int main(int argc, char *argv[])
 		socklen_t clilen;
 		struct sockaddr_in serv_addr, cli_addr;
 		int n;
+        pid_t childpid;
 		if (argc < 2) {
 				fprintf(stderr,"ERROR, no port provided\n");
 				exit(1);
@@ -44,18 +43,17 @@ int main(int argc, char *argv[])
 		clilen = sizeof(cli_addr);
 
 		int count = 0;
-	    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-		if (newsockfd < 0) error("ERROR on accept");
-		
-		while(1) {
-            n = read(newsockfd, &line[count], 1);
-
-            if(count > 0) {
-
-			    if(line[count-1] == '\r' && line[count] == '\n') {
-				    line[count+1] = '\0';
-					if(strlen(line) == 2 && line[0] == '\r' && line[1] == '\n') {
-					char *response = "HTTP/1.1 200 OK\r\n"
+	    while(1){
+            newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+		    if (newsockfd < 0) error("ERROR on accept");
+            if ((childpid = fork()) == 0){
+                close(sockfd);
+                while(1){
+                    recv(newsockfd,line, 1014,0);
+                    if(strcmp(line,":exit") == 0){
+                        break;
+                    } else {
+                        char *response = "HTTP/1.1 200 OK\r\n"
 					                 "Content-Length: 88\r\n"
                                      "Content-Type: text/html\r\n"
                                      "Connection: Close\r\n"
@@ -65,23 +63,15 @@ int main(int argc, char *argv[])
                                      "<h1>teste!</h1>"
                                     "</body>"
                                     "</html>";
-                                                
-					
-					write(newsockfd, response, strlen(response));
-					close(newsockfd);
-					newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-		    if (newsockfd < 0) error("ERROR on accept");
-	}
-
-				count = 0;
-				continue;
-							
-			}
-		}
-				count++;
-				if (n < 0) error("ERROR reading from socket");
-			}
-		
-		close(sockfd);
-		return 0; 
+                        write(newsockfd, response, strlen(response));
+					    close(newsockfd);
+					    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);                            
+                    }
+                }
+            }
+            count++;
+            if(n<0) error("ERROR reading from socket");
+        }
+    close(newsockfd);
+    return 0;   
 }
